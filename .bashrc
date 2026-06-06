@@ -10,3 +10,6 @@ export BROWSER=chromium
 
 # opencode
 export PATH=/home/ed/.opencode/bin:$PATH
+
+# dotfiles bare repo
+alias githome='git --git-dir=$HOME/.config/bspwm-configs.git --work-tree=$HOME'
