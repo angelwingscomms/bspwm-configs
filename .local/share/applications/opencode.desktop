@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=opencode
+Comment=AI coding assistant
+Exec=/home/ed/.opencode/bin/opencode
+Terminal=true
+Type=Application
+Categories=Development;

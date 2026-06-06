@@ -1,0 +1,52 @@
+#!/bin/sh
+
+IFACE="wlp0s20f3"
+STATEFILE="${XDG_DATA_HOME:-$HOME/.local/share}/datacount/wifi"
+RX_FILE="/sys/class/net/${IFACE}/statistics/rx_bytes"
+TX_FILE="/sys/class/net/${IFACE}/statistics/tx_bytes"
+
+mkdir -p "$(dirname "$STATEFILE")"
+
+read_counters() {
+    rx=$(cat "$RX_FILE" 2>/dev/null || echo 0)
+    tx=$(cat "$TX_FILE" 2>/dev/null || echo 0)
+    echo $((rx + tx))
+}
+
+add_commas() {
+    echo "$1" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1,\2/;ta'
+}
+
+do_reset() {
+    current=$(read_counters)
+    echo "0" > "$STATEFILE"
+    echo "$current" >> "$STATEFILE"
+    echo "0"
+}
+
+do_show() {
+    if [ ! -f "$STATEFILE" ]; then
+        current=$(read_counters)
+        echo "0" > "$STATEFILE"
+        echo "$current" >> "$STATEFILE"
+    fi
+
+    current=$(read_counters)
+    { read accum && read prev; } < "$STATEFILE"
+
+    diff=$((current - prev))
+    if [ "$diff" -ge 0 ]; then
+        accum=$((accum + diff))
+    fi
+    prev=$current
+
+    echo "$accum" > "$STATEFILE"
+    echo "$prev" >> "$STATEFILE"
+
+    add_commas $((accum / 1024))
+}
+
+case "${1:-show}" in
+    reset) do_reset ;;
+    show) do_show ;;
+esac

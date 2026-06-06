@@ -1,0 +1,77 @@
+#!/bin/sh
+
+IFACE="wlp0s20f3"
+WCLI="wpa_cli -i $IFACE"
+
+# get current connection
+current_ssid=$($WCLI status 2>/dev/null | sed -n 's/^ssid=//p')
+[ -n "$current_ssid" ] && status_txt="Connected: $current_ssid" || status_txt="Disconnected"
+
+# main menu
+choice=$(printf "Scan\n%s\nDisconnect\nManual SSID" "$status_txt" | dmenu -p "WiFi")
+[ -z "$choice" ] && exit
+
+case "$choice" in
+    "Scan")
+        $WCLI scan >/dev/null 2>&1
+        sleep 3
+        networks=$($WCLI scan_results 2>/dev/null | tail -n +2 | awk -F'\t' '
+        {
+            ssid=$5
+            if (ssid == "" || ssid == "\\x00") next
+            sig=$3 + 0
+            if (sig >= -50) b="█"
+            else if (sig >= -60) b="▆"
+            else if (sig >= -70) b="▄"
+            else b="▂"
+            if (!seen[ssid]++) print b, ssid
+        }
+        ' | sort)
+
+        [ -z "$networks" ] && networks="No networks found"
+
+        selected=$(echo "$networks" | dmenu -l 10 -p "Network")
+        [ -z "$selected" ] && exit
+        ssid=$(echo "$selected" | sed 's/^[^ ]* //')
+
+        # check if known
+        net_id=$($WCLI list_networks 2>/dev/null | awk -v ssid="$ssid" 'NR>1 && $2 == "\""ssid"\"" {print $1}')
+
+        if [ -n "$net_id" ]; then
+            $WCLI select_network "$net_id"
+            $WCLI enable_network "$net_id"
+        else
+            password=$(dmenu -p "Password for $ssid (⏎ open)")
+            net_id=$($WCLI add_network)
+            $WCLI set_network "$net_id" ssid "\"$ssid\""
+            if [ -n "$password" ]; then
+                $WCLI set_network "$net_id" psk "\"$password\""
+            else
+                $WCLI set_network "$net_id" key_mgmt NONE
+            fi
+            $WCLI enable_network "$net_id"
+            $WCLI select_network "$net_id"
+            $WCLI save_config
+        fi
+        ;;
+
+    "Disconnect")
+        $WCLI disconnect
+        ;;
+
+    "Manual SSID")
+        ssid=$(dmenu -p "Enter SSID")
+        [ -z "$ssid" ] && exit
+        password=$(dmenu -p "Password for $ssid (⏎ open)")
+        net_id=$($WCLI add_network)
+        $WCLI set_network "$net_id" ssid "\"$ssid\""
+        if [ -n "$password" ]; then
+            $WCLI set_network "$net_id" psk "\"$password\""
+        else
+            $WCLI set_network "$net_id" key_mgmt NONE
+        fi
+        $WCLI enable_network "$net_id"
+        $WCLI select_network "$net_id"
+        $WCLI save_config
+        ;;
+esac

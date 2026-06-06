@@ -1,0 +1,20 @@
+#!/bin/sh
+cmd=$(dmenu_path | dmenu -i -l 10 "$@") && [ -n "$cmd" ] || exit
+
+name=$(basename "$cmd")
+
+# search for a matching .desktop file
+desktop=$(find /usr/share/applications ~/.local/share/applications \
+    -name '*.desktop' 2>/dev/null \
+    | xargs grep -l -m1 "^Exec=.*$name" 2>/dev/null \
+    | head -1)
+
+if [ -n "$desktop" ]; then
+    terminal=$(grep -m1 '^Terminal=' "$desktop" 2>/dev/null | cut -d= -f2)
+    if [ "$terminal" = "false" ]; then
+        setsid "$cmd" >/dev/null 2>&1 &
+        exit
+    fi
+fi
+
+urxvt -e "$cmd"
